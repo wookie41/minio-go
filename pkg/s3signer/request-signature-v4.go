@@ -27,6 +27,8 @@ import (
 	"time"
 
 	"github.com/minio/minio-go/pkg/s3utils"
+	"fmt"
+	"net/url"
 )
 
 // Signature and API related constants.
@@ -312,4 +314,60 @@ func SignV4(req http.Request, accessKeyID, secretAccessKey, sessionToken, locati
 	req.Header.Set("Authorization", auth)
 
 	return &req
+}
+
+// VerifyV4 verify if v4 signature is correct
+func VerifyV4(req http.Request, secretAccessKey string) (bool, error) {
+	origAuthHeader, err := extractAuthorizationHeader(req.Header.Get("Authorization"))
+	if err != nil {
+		return false, fmt.Errorf("error while parsing authorization header")
+	}
+	if origAuthHeader.version != signV4Algorithm {
+		return false, fmt.Errorf("incorrect authHeader version %s", origAuthHeader.version)
+	}
+
+	// Remove x-amz-signature from url
+	parsedQuery, err := url.ParseQuery(req.URL.RawQuery)
+	parsedQuery.Get("x-amz-signature")
+	for key := range parsedQuery {
+		if strings.ToLower(key) == "x-amz-signature" {
+			parsedQuery.Del(key)
+		}
+	}
+	req.URL.RawQuery = parsedQuery.Encode()
+
+	// Get request time from x-amz-date header
+	t, err := time.Parse(iso8601DateFormat, req.Header.Get("x-amz-date"))
+	if err != nil {
+		return false, fmt.Errorf("error while parsing x-amz-date header")
+	}
+
+	// Get list of headers to ignore
+	signedHeaders := map[string]struct{}{}
+	for _, name := range strings.Split(origAuthHeader.signedHeaders, ";") {
+		signedHeaders[name] = struct{}{}
+	}
+	ignoredHeaders := map[string]bool{}
+	for name := range req.Header {
+		if _, ok := signedHeaders[strings.ToLower(name)]; !ok {
+			ignoredHeaders[name] = true
+		}
+	}
+
+	// Get canonical request.
+	canonicalRequest := getCanonicalRequest(req, ignoredHeaders)
+
+	// Get string to sign from canonical request.
+	stringToSign := getStringToSignV4(t, origAuthHeader.region, canonicalRequest)
+
+	// Get hmac signing key.
+	signingKey := getSigningKey(secretAccessKey, origAuthHeader.region, t)
+
+	// Calculate signature.
+	signature := getSignature(signingKey, stringToSign)
+
+	if signature == origAuthHeader.signature {
+		return true, nil
+	}
+	return false, fmt.Errorf("request signature mismatch")
 }

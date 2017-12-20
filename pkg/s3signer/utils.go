@@ -21,6 +21,9 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"net/http"
+
+	"fmt"
+	"regexp"
 )
 
 // unsignedPayload - value to be set to X-Amz-Content-Sha256 header when
@@ -46,4 +49,35 @@ func getHostAddr(req *http.Request) string {
 		return req.Host
 	}
 	return req.URL.Host
+}
+
+const (
+	regexV2Algorithm = "AWS +(?P<access_key>[a-zA-Z0-9_-]+):(?P<signature>(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?)"
+	regexV4Algorithm = "AWS4-HMAC-SHA256 +Credential=(?P<access_key>[a-zA-Z0-9_-]+)/[0-9]+/(?P<region>[a-zA-Z0-9-]*)/[a-zA-Z0-9-]+/aws4_request, +SignedHeaders=(?P<signed_headers>[a-z0-9-;]+), +Signature=(?P<signature>[a-z0-9]+)"
+)
+
+var reV2 = regexp.MustCompile(regexV2Algorithm)
+var reV4 = regexp.MustCompile(regexV4Algorithm)
+
+type parsedAuthorizationHeader struct {
+	version       string
+	accessKey     string
+	signature     string
+	signedHeaders string
+	region        string
+}
+
+// extractAuthorizationHeader - extract S3 authorization header details
+func extractAuthorizationHeader(authorizationHeader string) (authHeader parsedAuthorizationHeader, err error) {
+	if reV2.MatchString(authorizationHeader) {
+		match := reV2.FindStringSubmatch(authorizationHeader)
+		return parsedAuthorizationHeader{accessKey: match[1], signature: match[2], version: signV2Algorithm}, nil
+	}
+
+	if reV4.MatchString(authorizationHeader) {
+		match := reV4.FindStringSubmatch(authorizationHeader)
+		return parsedAuthorizationHeader{accessKey: match[1], signature: match[4], region: match[2], signedHeaders: match[3], version: signV4Algorithm}, nil
+	}
+
+	return parsedAuthorizationHeader{}, fmt.Errorf("cannot find correct authorization header")
 }

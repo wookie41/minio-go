@@ -319,3 +319,35 @@ func writeCanonicalizedResource(buf *bytes.Buffer, req http.Request) {
 		}
 	}
 }
+
+// VerifyV2 verify if v2 signature is correct
+func VerifyV2(req http.Request, secretAccessKey string) (bool, error) {
+	origAuthHeader, err := extractAuthorizationHeader(req.Header.Get("Authorization"))
+	if err != nil {
+		return false, fmt.Errorf("error while parsing authorization header")
+	}
+
+	if origAuthHeader.version != signV2Algorithm {
+		return false, fmt.Errorf("incorrect authHeader version %s", origAuthHeader.version)
+	}
+
+	// Calculate HMAC for secretAccessKey.
+	stringToSign := stringToSignV2(req)
+	hm := hmac.New(sha1.New, []byte(secretAccessKey))
+	hm.Write([]byte(stringToSign))
+
+	// Prepare auth header.
+	authHeader := new(bytes.Buffer)
+	authHeader.WriteString(fmt.Sprintf("%s %s:", signV2Algorithm, origAuthHeader.accessKey))
+	encoder := base64.NewEncoder(base64.StdEncoding, authHeader)
+	encoder.Write(hm.Sum(nil))
+	encoder.Close()
+
+	// Set Authorization header.
+	if req.Header.Get("Authorization") == authHeader.String() {
+		return true, nil
+	} else {
+		return false, fmt.Errorf("request signature mismatch")
+	}
+
+}
