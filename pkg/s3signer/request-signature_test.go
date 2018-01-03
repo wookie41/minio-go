@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"io"
 )
 
 // Tests signature calculation.
@@ -68,4 +69,29 @@ func TestSignatureCalculation(t *testing.T) {
 	if !strings.Contains(req.URL.RawQuery, "Signature") {
 		t.Fatal("Error: normal credentials should not have Signature query resource.")
 	}
+}
+
+func TestRequestHost(t *testing.T) {
+	req, _ := buildRequest("dynamodb", "us-east-1", "{}")
+	req.URL.RawQuery = "Foo=z&Foo=o&Foo=m&Foo=a"
+	req.Host = "myhost"
+	canonicalHeaders := getCanonicalHeaders(*req, v4IgnoredHeaders)
+
+	if !strings.Contains(canonicalHeaders, "host:"+req.Host) {
+		t.Errorf("canonical host header invalid")
+	}
+}
+
+func buildRequest(serviceName, region, body string) (*http.Request, io.ReadSeeker) {
+	endpoint := "https://" + serviceName + "." + region + ".amazonaws.com"
+	reader := strings.NewReader(body)
+	req, _ := http.NewRequest("POST", endpoint, reader)
+	req.URL.Opaque = "//example.org/bucket/key-._~,!@#$%^&*()"
+	req.Header.Add("X-Amz-Target", "prefix.Operation")
+	req.Header.Add("Content-Type", "application/x-amz-json-1.0")
+	req.Header.Add("Content-Length", string(len(body)))
+	req.Header.Add("X-Amz-Meta-Other-Header", "some-value=!@#$%^&* (+)")
+	req.Header.Add("X-Amz-Meta-Other-Header_With_Underscore", "some-value=!@#$%^&* (+)")
+	req.Header.Add("X-amz-Meta-Other-Header_With_Underscore", "some-value=!@#$%^&* (+)")
+	return req, reader
 }
