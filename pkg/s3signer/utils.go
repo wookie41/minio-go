@@ -26,8 +26,12 @@ import (
 	"regexp"
 )
 
-// unsignedPayload - value to be set to X-Amz-Content-Sha256 header when
-const unsignedPayload = "UNSIGNED-PAYLOAD"
+const (
+	// CustomStorageHost is an internal HTTP Header that indicates a custom storage host usage
+	CustomStorageHost = "X-Custom-Storage-Host-3kl1Sc29"
+	// unsignedPayload - value to be set to X-Amz-Content-Sha256 header when
+	unsignedPayload = "UNSIGNED-PAYLOAD"
+)
 
 // sum256 calculate sha256 sum for an input byte array.
 func sum256(data []byte) []byte {

@@ -20,6 +20,8 @@ package s3signer
 import (
 	"sort"
 	"testing"
+	"net/url"
+	"net/http"
 )
 
 // Tests for 'func TestResourceListSorting(t *testing.T)'.
@@ -31,6 +33,38 @@ func TestResourceListSorting(t *testing.T) {
 		if resourceList[i] != sortedResourceList[i] {
 			t.Errorf("Expected resourceList[%d] = \"%s\", resourceList is not correctly sorted.", i, sortedResourceList[i])
 			break
+		}
+	}
+}
+
+func TestEncodeURL2PathWithVirtualHost(t *testing.T) {
+
+	amazonURL,  _ := url.Parse("http://my.amazon.bucket.s3.us-east-2.amazonaws.com/amazonobject")
+	googleURL,  _ := url.Parse("http://my.google.bucket.storage.googleapis.com/googleobject")
+	customStorageURL,  _ := url.Parse("http://my.custom.bucket.custom.storage.com/customobject")
+
+	testCases := []struct {
+		Url *url.URL
+		ExpectedPath string
+		CustomStorageHeader string
+	} {
+		{amazonURL, "/my.amazon.bucket/amazonobject", ""},
+		{googleURL, "/my.google.bucket/googleobject", ""},
+		{customStorageURL, "/my.custom.bucket/customobject", "custom.storage.com"},
+	}
+
+	var testResults []bool
+
+	for _, testCase := range testCases {
+		request := &http.Request{URL: testCase.Url, Header: make(map[string][]string, 1)}
+		request.Header.Set(CustomStorageHost, testCase.CustomStorageHeader)
+		testResult := encodeURL2Path(request) == testCase.ExpectedPath
+		testResults = append(testResults, testResult)
+	}
+
+	for index, testResult := range testResults {
+		if !testResult {
+			t.Fatalf("Failed to encode - %s", testCases[index])
 		}
 	}
 }
