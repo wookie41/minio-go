@@ -40,7 +40,7 @@ func TestGetSeedSignature(t *testing.T) {
 		t.Fatalf("Failed to parse time - %v", err)
 	}
 
-	req = StreamingSignV4(req, accessKeyID, secretAccessKeyID, "", "us-east-1", int64(dataLen), reqTime)
+	req = StreamingSignV4(req, accessKeyID, secretAccessKeyID, "", "us-east-1", "s3", int64(dataLen), reqTime)
 	actualSeedSignature := req.Body.(*StreamingReader).seedSignature
 
 	expectedSeedSignature := "38cab3af09aa15ddf29e26e36236f60fb6bfb6243a20797ae9a8183674526079"
@@ -54,9 +54,10 @@ func TestChunkSignature(t *testing.T) {
 	reqTime, _ := time.Parse(iso8601DateFormat, "20130524T000000Z")
 	previousSignature := "4f232c4386841ef735655705268965c44a0e4690baa4adea153f7db9fa80a0a9"
 	location := "us-east-1"
+	service := "s3"
 	secretAccessKeyID := "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 	expectedSignature := "ad80c730a21e5b8d04586a2213dd63b9a0e99e0e2307b0ade35a65485a288648"
-	actualSignature := buildChunkSignature(chunkData, reqTime, location, previousSignature, secretAccessKeyID)
+	actualSignature := buildChunkSignature(chunkData, reqTime, location, service, previousSignature, secretAccessKeyID)
 	if actualSignature != expectedSignature {
 		t.Errorf("Expected %s but received %s", expectedSignature, actualSignature)
 	}
@@ -64,6 +65,7 @@ func TestChunkSignature(t *testing.T) {
 
 func TestSetStreamingAuthorization(t *testing.T) {
 	location := "us-east-1"
+	service := "s3"
 	secretAccessKeyID := "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 	accessKeyID := "AKIAIOSFODNN7EXAMPLE"
 
@@ -74,7 +76,7 @@ func TestSetStreamingAuthorization(t *testing.T) {
 
 	dataLen := int64(65 * 1024)
 	reqTime, _ := time.Parse(iso8601DateFormat, "20130524T000000Z")
-	req = StreamingSignV4(req, accessKeyID, secretAccessKeyID, "", location, dataLen, reqTime)
+	req = StreamingSignV4(req, accessKeyID, secretAccessKeyID, "", location, service, dataLen, reqTime)
 
 	expectedAuthorization := "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20130524/us-east-1/s3/aws4_request,SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-decoded-content-length;x-amz-storage-class,Signature=38cab3af09aa15ddf29e26e36236f60fb6bfb6243a20797ae9a8183674526079"
 
@@ -87,6 +89,7 @@ func TestSetStreamingAuthorization(t *testing.T) {
 func TestStreamingReader(t *testing.T) {
 	reqTime, _ := time.Parse("20060102T150405Z", "20130524T000000Z")
 	location := "us-east-1"
+	service := "s3"
 	secretAccessKeyID := "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 	accessKeyID := "AKIAIOSFODNN7EXAMPLE"
 	dataLen := int64(65 * 1024)
@@ -99,7 +102,7 @@ func TestStreamingReader(t *testing.T) {
 
 	baseReader := ioutil.NopCloser(bytes.NewReader(bytes.Repeat([]byte("a"), 65*1024)))
 	req.Body = baseReader
-	req = StreamingSignV4(req, accessKeyID, secretAccessKeyID, "", location, dataLen, reqTime)
+	req = StreamingSignV4(req, accessKeyID, secretAccessKeyID, "", location, service, dataLen, reqTime)
 
 	b, err := ioutil.ReadAll(req.Body)
 	if err != nil {

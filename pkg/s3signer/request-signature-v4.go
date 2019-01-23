@@ -81,10 +81,10 @@ var v4IgnoredHeaders = map[string]bool{
 }
 
 // getSigningKey hmac seed to calculate final signature.
-func getSigningKey(secret, loc string, t time.Time) []byte {
+func getSigningKey(secret, loc, serv string, t time.Time) []byte {
 	date := sumHMAC([]byte("AWS4"+secret), []byte(t.Format(yyyymmdd)))
 	location := sumHMAC(date, []byte(loc))
-	service := sumHMAC(location, []byte("s3"))
+	service := sumHMAC(location, []byte(serv))
 	signingKey := sumHMAC(service, []byte("aws4_request"))
 	return signingKey
 }
@@ -96,19 +96,19 @@ func getSignature(signingKey []byte, stringToSign string) string {
 
 // getScope generate a string of a specific date, an AWS region, and a
 // service.
-func getScope(location string, t time.Time) string {
+func getScope(location, service string, t time.Time) string {
 	scope := strings.Join([]string{
 		t.Format(yyyymmdd),
 		location,
-		"s3",
+		service,
 		"aws4_request",
 	}, "/")
 	return scope
 }
 
 // GetCredential generate a credential string.
-func GetCredential(accessKeyID, location string, t time.Time) string {
-	scope := getScope(location, t)
+func GetCredential(accessKeyID, location, service string, t time.Time) string {
+	scope := getScope(location, service, t)
 	return accessKeyID + "/" + scope
 }
 
@@ -200,16 +200,16 @@ func getCanonicalRequest(req http.Request, ignoredHeaders map[string]bool) strin
 }
 
 // getStringToSign a string based on selected query values.
-func getStringToSignV4(t time.Time, location, canonicalRequest string) string {
+func getStringToSignV4(t time.Time, location, service, canonicalRequest string) string {
 	stringToSign := signV4Algorithm + "\n" + t.Format(iso8601DateFormat) + "\n"
-	stringToSign = stringToSign + getScope(location, t) + "\n"
+	stringToSign = stringToSign + getScope(location, service, t) + "\n"
 	stringToSign = stringToSign + hex.EncodeToString(sum256([]byte(canonicalRequest)))
 	return stringToSign
 }
 
 // PreSignV4 presign the request, in accordance with
 // http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html.
-func PreSignV4(req http.Request, accessKeyID, secretAccessKey, sessionToken, location string, expires int64) *http.Request {
+func PreSignV4(req http.Request, accessKeyID, secretAccessKey, sessionToken, location, service string, expires int64) *http.Request {
 	// Presign is not needed for anonymous credentials.
 	if accessKeyID == "" || secretAccessKey == "" {
 		return &req
@@ -219,7 +219,7 @@ func PreSignV4(req http.Request, accessKeyID, secretAccessKey, sessionToken, loc
 	t := time.Now().UTC()
 
 	// Get credential string.
-	credential := GetCredential(accessKeyID, location, t)
+	credential := GetCredential(accessKeyID, location, service, t)
 
 	// Get all signed headers.
 	signedHeaders := getSignedHeaders(req, v4IgnoredHeaders)
@@ -241,10 +241,10 @@ func PreSignV4(req http.Request, accessKeyID, secretAccessKey, sessionToken, loc
 	canonicalRequest := getCanonicalRequest(req, v4IgnoredHeaders)
 
 	// Get string to sign from canonical request.
-	stringToSign := getStringToSignV4(t, location, canonicalRequest)
+	stringToSign := getStringToSignV4(t, location, service, canonicalRequest)
 
 	// Gext hmac signing key.
-	signingKey := getSigningKey(secretAccessKey, location, t)
+	signingKey := getSigningKey(secretAccessKey, location, service, t)
 
 	// Calculate signature.
 	signature := getSignature(signingKey, stringToSign)
@@ -257,9 +257,9 @@ func PreSignV4(req http.Request, accessKeyID, secretAccessKey, sessionToken, loc
 
 // PostPresignSignatureV4 - presigned signature for PostPolicy
 // requests.
-func PostPresignSignatureV4(policyBase64 string, t time.Time, secretAccessKey, location string) string {
+func PostPresignSignatureV4(policyBase64 string, t time.Time, secretAccessKey, location, service string) string {
 	// Get signining key.
-	signingkey := getSigningKey(secretAccessKey, location, t)
+	signingkey := getSigningKey(secretAccessKey, location, service, t)
 	// Calculate signature.
 	signature := getSignature(signingkey, policyBase64)
 	return signature
@@ -267,7 +267,7 @@ func PostPresignSignatureV4(policyBase64 string, t time.Time, secretAccessKey, l
 
 // SignV4 sign the request before Do(), in accordance with
 // http://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-authenticating-requests.html.
-func SignV4(req http.Request, accessKeyID, secretAccessKey, sessionToken, location string) *http.Request {
+func SignV4(req http.Request, accessKeyID, secretAccessKey, sessionToken, location, service string) *http.Request {
 	// Signature calculation is not needed for anonymous credentials.
 	if accessKeyID == "" || secretAccessKey == "" {
 		return &req
@@ -288,13 +288,13 @@ func SignV4(req http.Request, accessKeyID, secretAccessKey, sessionToken, locati
 	canonicalRequest := getCanonicalRequest(req, v4IgnoredHeaders)
 
 	// Get string to sign from canonical request.
-	stringToSign := getStringToSignV4(t, location, canonicalRequest)
+	stringToSign := getStringToSignV4(t, location, service, canonicalRequest)
 
 	// Get hmac signing key.
-	signingKey := getSigningKey(secretAccessKey, location, t)
+	signingKey := getSigningKey(secretAccessKey, location, service, t)
 
 	// Get credential string.
-	credential := GetCredential(accessKeyID, location, t)
+	credential := GetCredential(accessKeyID, location, service, t)
 
 	// Get all signed headers.
 	signedHeaders := getSignedHeaders(req, v4IgnoredHeaders)
@@ -358,10 +358,10 @@ func VerifyV4(req http.Request, secretAccessKey string) (bool, error) {
 	canonicalRequest := getCanonicalRequest(req, ignoredHeaders)
 
 	// Get string to sign from canonical request.
-	stringToSign := getStringToSignV4(t, origAuthHeader.region, canonicalRequest)
+	stringToSign := getStringToSignV4(t, origAuthHeader.region, origAuthHeader.service, canonicalRequest)
 
 	// Get hmac signing key.
-	signingKey := getSigningKey(secretAccessKey, origAuthHeader.region, t)
+	signingKey := getSigningKey(secretAccessKey, origAuthHeader.region, origAuthHeader.service, t)
 
 	// Calculate signature.
 	signature := getSignature(signingKey, stringToSign)

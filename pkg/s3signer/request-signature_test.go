@@ -29,12 +29,12 @@ func TestSignatureCalculation(t *testing.T) {
 	if err != nil {
 		t.Fatal("Error:", err)
 	}
-	req = SignV4(*req, "", "", "", "us-east-1")
+	req = SignV4(*req, "", "", "", "us-east-1", "s3")
 	if req.Header.Get("Authorization") != "" {
 		t.Fatal("Error: anonymous credentials should not have Authorization header.")
 	}
 
-	req = PreSignV4(*req, "", "", "", "us-east-1", 0)
+	req = PreSignV4(*req, "", "", "", "us-east-1", "s3", 0)
 	if strings.Contains(req.URL.RawQuery, "X-Amz-Signature") {
 		t.Fatal("Error: anonymous credentials should not have Signature query resource.")
 	}
@@ -49,12 +49,12 @@ func TestSignatureCalculation(t *testing.T) {
 		t.Fatal("Error: anonymous credentials should not have Signature query resource.")
 	}
 
-	req = SignV4(*req, "ACCESS-KEY", "SECRET-KEY", "", "us-east-1")
+	req = SignV4(*req, "ACCESS-KEY", "SECRET-KEY", "", "us-east-1", "s3")
 	if req.Header.Get("Authorization") == "" {
 		t.Fatal("Error: normal credentials should have Authorization header.")
 	}
 
-	req = PreSignV4(*req, "ACCESS-KEY", "SECRET-KEY", "", "us-east-1", 0)
+	req = PreSignV4(*req, "ACCESS-KEY", "SECRET-KEY", "", "us-east-1", "s3", 0)
 	if !strings.Contains(req.URL.RawQuery, "X-Amz-Signature") {
 		t.Fatal("Error: normal credentials should have Signature query resource.")
 	}

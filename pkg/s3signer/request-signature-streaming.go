@@ -78,11 +78,11 @@ func getStreamLength(dataLen, chunkSize int64) int64 {
 
 // buildChunkStringToSign - returns the string to sign given chunk data
 // and previous signature.
-func buildChunkStringToSign(t time.Time, region, previousSig string, chunkData []byte) string {
+func buildChunkStringToSign(t time.Time, region, service, previousSig string, chunkData []byte) string {
 	stringToSignParts := []string{
 		streamingPayloadHdr,
 		t.Format(iso8601DateFormat),
-		getScope(region, t),
+		getScope(region, service, t),
 		previousSig,
 		emptySHA256,
 		hex.EncodeToString(sum256(chunkData)),
@@ -113,12 +113,11 @@ func buildChunkHeader(chunkLen int64, signature string) []byte {
 }
 
 // buildChunkSignature - returns chunk signature for a given chunk and previous signature.
-func buildChunkSignature(chunkData []byte, reqTime time.Time, region,
-	previousSignature, secretAccessKey string) string {
+func buildChunkSignature(chunkData []byte, reqTime time.Time, region, service,
+previousSignature, secretAccessKey string) string {
 
-	chunkStringToSign := buildChunkStringToSign(reqTime, region,
-		previousSignature, chunkData)
-	signingKey := getSigningKey(secretAccessKey, region, reqTime)
+	chunkStringToSign := buildChunkStringToSign(reqTime, region, service, previousSignature, chunkData)
+	signingKey := getSigningKey(secretAccessKey, region, service, reqTime)
 	return getSignature(signingKey, chunkStringToSign)
 }
 
@@ -128,9 +127,9 @@ func (s *StreamingReader) setSeedSignature(req *http.Request) {
 	canonicalRequest := getCanonicalRequest(*req, ignoredStreamingHeaders)
 
 	// Get string to sign from canonical request.
-	stringToSign := getStringToSignV4(s.reqTime, s.region, canonicalRequest)
+	stringToSign := getStringToSignV4(s.reqTime, s.region, s.service, canonicalRequest)
 
-	signingKey := getSigningKey(s.secretAccessKey, s.region, s.reqTime)
+	signingKey := getSigningKey(s.secretAccessKey, s.region, s.service, s.reqTime)
 
 	// Calculate signature.
 	s.seedSignature = getSignature(signingKey, stringToSign)
@@ -145,6 +144,7 @@ type StreamingReader struct {
 	region          string
 	prevSignature   string
 	seedSignature   string
+	service 		string
 	contentLen      int64         // Content-Length from req header
 	baseReadCloser  io.ReadCloser // underlying io.Reader
 	bytesRead       int64         // bytes read from underlying io.Reader
@@ -162,7 +162,7 @@ type StreamingReader struct {
 func (s *StreamingReader) signChunk(chunkLen int) {
 	// Compute chunk signature for next header
 	signature := buildChunkSignature(s.chunkBuf[:chunkLen], s.reqTime,
-		s.region, s.prevSignature, s.secretAccessKey)
+		s.region, s.service, s.prevSignature, s.secretAccessKey)
 
 	// For next chunk signature computation
 	s.prevSignature = signature
@@ -185,7 +185,7 @@ func (s *StreamingReader) signChunk(chunkLen int) {
 // setStreamingAuthHeader - builds and sets authorization header value
 // for streaming signature.
 func (s *StreamingReader) setStreamingAuthHeader(req *http.Request) {
-	credential := GetCredential(s.accessKeyID, s.region, s.reqTime)
+	credential := GetCredential(s.accessKeyID, s.region, s.service, s.reqTime)
 	authParts := []string{
 		signV4Algorithm + " Credential=" + credential,
 		"SignedHeaders=" + getSignedHeaders(*req, ignoredStreamingHeaders),
@@ -200,7 +200,7 @@ func (s *StreamingReader) setStreamingAuthHeader(req *http.Request) {
 // StreamingSignV4 - provides chunked upload signatureV4 support by
 // implementing io.Reader.
 func StreamingSignV4(req *http.Request, accessKeyID, secretAccessKey, sessionToken,
-	region string, dataLen int64, reqTime time.Time) *http.Request {
+region, service string, dataLen int64, reqTime time.Time) *http.Request {
 
 	// Set headers needed for streaming signature.
 	prepareStreamingRequest(req, sessionToken, dataLen, reqTime)
@@ -215,6 +215,7 @@ func StreamingSignV4(req *http.Request, accessKeyID, secretAccessKey, sessionTok
 		secretAccessKey: secretAccessKey,
 		sessionToken:    sessionToken,
 		region:          region,
+		service: service,
 		reqTime:         reqTime,
 		chunkBuf:        make([]byte, payloadChunkSize),
 		contentLen:      dataLen,
@@ -247,8 +248,8 @@ func (s *StreamingReader) Read(buf []byte) (int, error) {
 	// never re-fill s.buf.
 	case s.done:
 
-	// s.buf will be (re-)filled with next chunk when has lesser
-	// bytes than asked for.
+		// s.buf will be (re-)filled with next chunk when has lesser
+		// bytes than asked for.
 	case s.buf.Len() < len(buf):
 		s.chunkBufLen = 0
 		for {

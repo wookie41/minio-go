@@ -64,7 +64,7 @@ func TestEncodeURL2PathWithVirtualHost(t *testing.T) {
 
 	for index, testResult := range testResults {
 		if !testResult {
-			t.Fatalf("Failed to encode - %s", testCases[index])
+			t.Fatalf("Failed to translate - %s", testCases[index])
 		}
 	}
 }
