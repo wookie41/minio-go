@@ -47,6 +47,7 @@ var ignoredStreamingHeaders = map[string]bool{
 	"Authorization": true,
 	"User-Agent":    true,
 	"Content-Type":  true,
+	"Content-Length":  true,
 }
 
 // getSignedChunkLength - calculates the length of chunk metadata

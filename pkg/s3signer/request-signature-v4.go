@@ -74,10 +74,12 @@ const (
 ///      Is skipped for obvious reasons
 ///
 var v4IgnoredHeaders = map[string]bool{
-	"Authorization":  true,
-	"Content-Type":   true,
-	"Content-Length": true,
-	"User-Agent":     true,
+	"Authorization":  	true,
+	"Content-Type":   	true,
+	"Content-Length": 	true,
+	"User-Agent":     	true,
+	"Connection": 		true,
+
 }
 
 // getSigningKey hmac seed to calculate final signature.
