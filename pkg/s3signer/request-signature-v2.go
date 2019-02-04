@@ -71,7 +71,7 @@ func encodeURL2Path(req *http.Request) (path string) {
 
 // PreSignV2 - presign the request in following style.
 // https://${S3_BUCKET}.s3.amazonaws.com/${S3_OBJECT}?AWSAccessKeyId=${S3_ACCESS_KEY}&Expires=${TIMESTAMP}&Signature=${SIGNATURE}.
-func PreSignV2(req http.Request, accessKeyID, secretAccessKey string, expires int64) *http.Request {
+func PreSignV2(req http.Request, accessKeyID, secretAccessKey string, expires int64, ignoredCanonicalizedHeaders map[string]bool) *http.Request {
 	// Presign is not needed for anonymous credentials.
 	if accessKeyID == "" || secretAccessKey == "" {
 		return &req
@@ -87,7 +87,7 @@ func PreSignV2(req http.Request, accessKeyID, secretAccessKey string, expires in
 	}
 
 	// Get presigned string to sign.
-	stringToSign := preStringToSignV2(req)
+	stringToSign := preStringToSignV2(req, ignoredCanonicalizedHeaders)
 	hm := hmac.New(sha1.New, []byte(secretAccessKey))
 	hm.Write([]byte(stringToSign))
 
@@ -141,7 +141,7 @@ func PostPresignSignatureV2(policyBase64, secretAccessKey string) string {
 // CanonicalizedProtocolHeaders = <described below>
 
 // SignV2 sign the request before Do() (AWS Signature Version 2).
-func SignV2(req http.Request, accessKeyID, secretAccessKey string) *http.Request {
+func SignV2(req http.Request, accessKeyID, secretAccessKey string, ignoredCanonicalizedHeaders map[string]bool) *http.Request {
 	// Signature calculation is not needed for anonymous credentials.
 	if accessKeyID == "" || secretAccessKey == "" {
 		return &req
@@ -156,7 +156,7 @@ func SignV2(req http.Request, accessKeyID, secretAccessKey string) *http.Request
 	}
 
 	// Calculate HMAC for secretAccessKey.
-	stringToSign := stringToSignV2(req)
+	stringToSign := stringToSignV2(req, ignoredCanonicalizedHeaders)
 	hm := hmac.New(sha1.New, []byte(secretAccessKey))
 	hm.Write([]byte(stringToSign))
 
@@ -181,12 +181,12 @@ func SignV2(req http.Request, accessKeyID, secretAccessKey string) *http.Request
 //	 Expires + "\n" +
 //	 CanonicalizedProtocolHeaders +
 //	 CanonicalizedResource;
-func preStringToSignV2(req http.Request) string {
+func preStringToSignV2(req http.Request, ignoredHeaders map[string]bool) string {
 	buf := new(bytes.Buffer)
 	// Write standard headers.
 	writePreSignV2Headers(buf, req)
 	// Write canonicalized protocol headers if any.
-	writeCanonicalizedHeaders(buf, req)
+	writeCanonicalizedHeaders(buf, req, ignoredHeaders)
 	// Write canonicalized Query resources if any.
 	writeCanonicalizedResource(buf, req)
 	return buf.String()
@@ -208,12 +208,12 @@ func writePreSignV2Headers(buf *bytes.Buffer, req http.Request) {
 //	 Date + "\n" +
 //	 CanonicalizedProtocolHeaders +
 //	 CanonicalizedResource;
-func stringToSignV2(req http.Request) string {
+func stringToSignV2(req http.Request, ignoredCanonicalizedHeaders map[string]bool) string {
 	buf := new(bytes.Buffer)
 	// Write standard headers.
 	writeSignV2Headers(buf, req)
 	// Write canonicalized protocol headers if any.
-	writeCanonicalizedHeaders(buf, req)
+	writeCanonicalizedHeaders(buf, req, ignoredCanonicalizedHeaders)
 	// Write canonicalized Query resources if any.
 	writeCanonicalizedResource(buf, req)
 	return buf.String()
@@ -228,7 +228,7 @@ func writeSignV2Headers(buf *bytes.Buffer, req http.Request) {
 }
 
 // writeCanonicalizedHeaders - write canonicalized headers.
-func writeCanonicalizedHeaders(buf *bytes.Buffer, req http.Request) {
+func writeCanonicalizedHeaders(buf *bytes.Buffer, req http.Request, ignoredHeaders map[string]bool) {
 	var protoHeaders []string
 	vals := make(map[string][]string)
 	for k, vv := range req.Header {
@@ -241,6 +241,9 @@ func writeCanonicalizedHeaders(buf *bytes.Buffer, req http.Request) {
 	}
 	sort.Strings(protoHeaders)
 	for _, k := range protoHeaders {
+		if _, isIgnored := ignoredHeaders[k]; isIgnored {
+			continue
+		}
 		buf.WriteString(k)
 		buf.WriteByte(':')
 		for idx, v := range vals[k] {
@@ -314,7 +317,7 @@ func writeCanonicalizedResource(buf *bytes.Buffer, req http.Request) {
 				switch n {
 				case 1:
 					buf.WriteByte('?')
-				// The rest
+					// The rest
 				default:
 					buf.WriteByte('&')
 				}
@@ -330,7 +333,7 @@ func writeCanonicalizedResource(buf *bytes.Buffer, req http.Request) {
 }
 
 // VerifyV2 verify if v2 signature is correct
-func VerifyV2(req http.Request, secretAccessKey string) (bool, error) {
+func VerifyV2(req http.Request, secretAccessKey string, ignoredCanonicalizedHeaders map[string]bool) (bool, error) {
 	origAuthHeader, err := extractAuthorizationHeader(req.Header.Get("Authorization"))
 	if err != nil {
 		return false, fmt.Errorf("error while parsing authorization header")
@@ -341,7 +344,7 @@ func VerifyV2(req http.Request, secretAccessKey string) (bool, error) {
 	}
 
 	// Calculate HMAC for secretAccessKey.
-	stringToSign := stringToSignV2(req)
+	stringToSign := stringToSignV2(req, ignoredCanonicalizedHeaders)
 	hm := hmac.New(sha1.New, []byte(secretAccessKey))
 	hm.Write([]byte(stringToSign))
 
