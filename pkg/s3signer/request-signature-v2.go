@@ -147,30 +147,35 @@ func SignV2(req http.Request, accessKeyID, secretAccessKey string, ignoredCanoni
 		return &req
 	}
 
+	// Prepare auth header.
+	authHeader := calculateV2(req, accessKeyID, secretAccessKey, ignoredCanonicalizedHeaders)
+
+	// Set Authorization header.
+	req.Header.Set("Authorization", authHeader)
+
+	return &req
+}
+
+func calculateV2(req http.Request, access string, secret string, ignoredCanHeaders map[string]bool) string {
 	// Initial time.
 	d := time.Now().UTC()
 
-	// Add date if not present.
-	if date := req.Header.Get("Date"); date == "" {
+	// Add date if x-amz-date is not present.
+	if req.Header.Get("X-Amz-Date") == "" && req.Header.Get("Date") == "" {
 		req.Header.Set("Date", d.Format(http.TimeFormat))
 	}
 
 	// Calculate HMAC for secretAccessKey.
-	stringToSign := stringToSignV2(req, ignoredCanonicalizedHeaders)
-	hm := hmac.New(sha1.New, []byte(secretAccessKey))
+	stringToSign := stringToSignV2(req, ignoredCanHeaders)
+	hm := hmac.New(sha1.New, []byte(secret))
 	hm.Write([]byte(stringToSign))
 
-	// Prepare auth header.
 	authHeader := new(bytes.Buffer)
-	authHeader.WriteString(fmt.Sprintf("%s %s:", signV2Algorithm, accessKeyID))
+	authHeader.WriteString(fmt.Sprintf("%s %s:", signV2Algorithm, access))
 	encoder := base64.NewEncoder(base64.StdEncoding, authHeader)
 	encoder.Write(hm.Sum(nil))
 	encoder.Close()
-
-	// Set Authorization header.
-	req.Header.Set("Authorization", authHeader.String())
-
-	return &req
+	return authHeader.String()
 }
 
 // From the Amazon docs:
@@ -343,20 +348,8 @@ func VerifyV2(req http.Request, secretAccessKey string, ignoredCanonicalizedHead
 		return false, fmt.Errorf("incorrect authHeader version %s", origAuthHeader.version)
 	}
 
-	// Calculate HMAC for secretAccessKey.
-	stringToSign := stringToSignV2(req, ignoredCanonicalizedHeaders)
-	hm := hmac.New(sha1.New, []byte(secretAccessKey))
-	hm.Write([]byte(stringToSign))
-
-	// Prepare auth header.
-	authHeader := new(bytes.Buffer)
-	authHeader.WriteString(fmt.Sprintf("%s %s:", signV2Algorithm, origAuthHeader.accessKey))
-	encoder := base64.NewEncoder(base64.StdEncoding, authHeader)
-	encoder.Write(hm.Sum(nil))
-	encoder.Close()
-
 	// Set Authorization header.
-	if req.Header.Get("Authorization") == authHeader.String() {
+	if req.Header.Get("Authorization") == calculateV2(req, origAuthHeader.accessKey, secretAccessKey, ignoredCanonicalizedHeaders) {
 		return true, nil
 	} else {
 		return false, fmt.Errorf("request signature mismatch")
