@@ -125,7 +125,7 @@ previousSignature, secretAccessKey string) string {
 // getSeedSignature - returns the seed signature for a given request.
 func (s *StreamingReader) setSeedSignature(req *http.Request) {
 	// Get canonical request
-	canonicalRequest := getCanonicalRequest(*req, ignoredStreamingHeaders)
+	canonicalRequest := getCanonicalRequest(req, ignoredStreamingHeaders)
 
 	// Get string to sign from canonical request.
 	stringToSign := getStringToSignV4(s.reqTime, s.region, s.service, canonicalRequest)
@@ -189,7 +189,7 @@ func (s *StreamingReader) setStreamingAuthHeader(req *http.Request) {
 	credential := GetCredential(s.accessKeyID, s.region, s.service, s.reqTime)
 	authParts := []string{
 		signV4Algorithm + " Credential=" + credential,
-		"SignedHeaders=" + getSignedHeaders(*req, ignoredStreamingHeaders),
+		"SignedHeaders=" + getSignedHeaders(req, ignoredStreamingHeaders),
 		"Signature=" + s.seedSignature,
 	}
 

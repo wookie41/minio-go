@@ -116,7 +116,7 @@ func GetCredential(accessKeyID, location, service string, t time.Time) string {
 
 // getHashedPayload get the hexadecimal value of the SHA256 hash of
 // the request payload.
-func getHashedPayload(req http.Request) string {
+func getHashedPayload(req *http.Request) string {
 	hashedPayload := req.Header.Get("X-Amz-Content-Sha256")
 	if hashedPayload == "" {
 		// Presign does not have a payload, use S3 recommended value.
@@ -127,7 +127,7 @@ func getHashedPayload(req http.Request) string {
 
 // getCanonicalHeaders generate a list of request headers for
 // signature.
-func getCanonicalHeaders(req http.Request, ignoredHeaders map[string]bool) string {
+func getCanonicalHeaders(req *http.Request, ignoredHeaders map[string]bool) string {
 	var headers []string
 	vals := make(map[string][]string)
 	for k, vv := range req.Header {
@@ -148,7 +148,7 @@ func getCanonicalHeaders(req http.Request, ignoredHeaders map[string]bool) strin
 		buf.WriteByte(':')
 		switch {
 		case k == "host":
-			buf.WriteString(getHostAddr(&req))
+			buf.WriteString(getHostAddr(req))
 			fallthrough
 		default:
 			for idx, v := range vals[k] {
@@ -166,7 +166,7 @@ func getCanonicalHeaders(req http.Request, ignoredHeaders map[string]bool) strin
 // getSignedHeaders generate all signed request headers.
 // i.e lexically sorted, semicolon-separated list of lowercase
 // request header names.
-func getSignedHeaders(req http.Request, ignoredHeaders map[string]bool) string {
+func getSignedHeaders(req *http.Request, ignoredHeaders map[string]bool) string {
 	var headers []string
 	for k := range req.Header {
 		if _, ok := ignoredHeaders[http.CanonicalHeaderKey(k)]; ok {
@@ -188,7 +188,7 @@ func getSignedHeaders(req http.Request, ignoredHeaders map[string]bool) string {
 //  <CanonicalHeaders>\n
 //  <SignedHeaders>\n
 //  <HashedPayload>
-func getCanonicalRequest(req http.Request, ignoredHeaders map[string]bool) string {
+func getCanonicalRequest(req *http.Request, ignoredHeaders map[string]bool) string {
 	req.URL.RawQuery = strings.Replace(req.URL.Query().Encode(), "+", "%20", -1)
 	canonicalRequest := strings.Join([]string{
 		req.Method,
@@ -211,10 +211,10 @@ func getStringToSignV4(t time.Time, location, service, canonicalRequest string) 
 
 // PreSignV4 presign the request, in accordance with
 // http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html.
-func PreSignV4(req http.Request, accessKeyID, secretAccessKey, sessionToken, location, service string, expires int64) *http.Request {
+func PreSignV4(req *http.Request, accessKeyID, secretAccessKey, sessionToken, location, service string, expires int64) *http.Request {
 	// Presign is not needed for anonymous credentials.
 	if accessKeyID == "" || secretAccessKey == "" {
-		return &req
+		return req
 	}
 
 	// Initial time.
@@ -254,7 +254,7 @@ func PreSignV4(req http.Request, accessKeyID, secretAccessKey, sessionToken, loc
 	// Add signature header to RawQuery.
 	req.URL.RawQuery += "&X-Amz-Signature=" + signature
 
-	return &req
+	return req
 }
 
 // PostPresignSignatureV4 - presigned signature for PostPolicy
@@ -269,10 +269,10 @@ func PostPresignSignatureV4(policyBase64 string, t time.Time, secretAccessKey, l
 
 // SignV4 sign the request before Do(), in accordance with
 // http://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-authenticating-requests.html.
-func SignV4(req http.Request, accessKeyID, secretAccessKey, sessionToken, location, service string) *http.Request {
+func SignV4(req *http.Request, accessKeyID, secretAccessKey, sessionToken, location, service string) *http.Request {
 	// Signature calculation is not needed for anonymous credentials.
 	if accessKeyID == "" || secretAccessKey == "" {
-		return &req
+		return req
 	}
 
 	// Initial time.
@@ -315,11 +315,11 @@ func SignV4(req http.Request, accessKeyID, secretAccessKey, sessionToken, locati
 	auth := strings.Join(parts, ", ")
 	req.Header.Set("Authorization", auth)
 
-	return &req
+	return req
 }
 
 // VerifyV4 verify if v4 signature is correct
-func VerifyV4(req http.Request, secretAccessKey string) (bool, error) {
+func VerifyV4(req *http.Request, secretAccessKey string) (bool, error) {
 	origAuthHeader, err := extractAuthorizationHeader(req.Header.Get("Authorization"))
 	if err != nil {
 		return false, fmt.Errorf("error while parsing authorization header")

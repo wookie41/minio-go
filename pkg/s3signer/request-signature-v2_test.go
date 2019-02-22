@@ -77,6 +77,6 @@ func TestShouldIngnoreTheSpecifiedHeadersDuringV2Signing(t *testing.T) {
 	req.Header = http.Header{}
 	req.Header.Add("x-amz-meta-test-header", "test-value")
 	req.Header.Add("x-amz-meta-date", "123")
-	writeCanonicalizedHeaders(buf, req, map[string]bool {"x-amz-meta-test-header": true})
+	writeCanonicalizedHeaders(buf, &req, map[string]bool {"x-amz-meta-test-header": true})
 	assert.Equal(t, buf.String(), "x-amz-meta-date:123\n")
 }

@@ -71,10 +71,10 @@ func encodeURL2Path(req *http.Request) (path string) {
 
 // PreSignV2 - presign the request in following style.
 // https://${S3_BUCKET}.s3.amazonaws.com/${S3_OBJECT}?AWSAccessKeyId=${S3_ACCESS_KEY}&Expires=${TIMESTAMP}&Signature=${SIGNATURE}.
-func PreSignV2(req http.Request, accessKeyID, secretAccessKey string, expires int64, ignoredCanonicalizedHeaders map[string]bool) *http.Request {
+func PreSignV2(req *http.Request, accessKeyID, secretAccessKey string, expires int64, ignoredCanonicalizedHeaders map[string]bool) *http.Request {
 	// Presign is not needed for anonymous credentials.
 	if accessKeyID == "" || secretAccessKey == "" {
-		return &req
+		return req
 	}
 
 	d := time.Now().UTC()
@@ -96,7 +96,7 @@ func PreSignV2(req http.Request, accessKeyID, secretAccessKey string, expires in
 
 	query := req.URL.Query()
 	// Handle specially for Google Cloud Storage.
-	if strings.Contains(getHostAddr(&req), ".storage.googleapis.com") {
+	if strings.Contains(getHostAddr(req), ".storage.googleapis.com") {
 		query.Set("GoogleAccessId", accessKeyID)
 	} else {
 		query.Set("AWSAccessKeyId", accessKeyID)
@@ -112,7 +112,7 @@ func PreSignV2(req http.Request, accessKeyID, secretAccessKey string, expires in
 	req.URL.RawQuery += "&Signature=" + s3utils.EncodePath(signature)
 
 	// Return.
-	return &req
+	return req
 }
 
 // PostPresignSignatureV2 - presigned signature for PostPolicy
@@ -141,10 +141,10 @@ func PostPresignSignatureV2(policyBase64, secretAccessKey string) string {
 // CanonicalizedProtocolHeaders = <described below>
 
 // SignV2 sign the request before Do() (AWS Signature Version 2).
-func SignV2(req http.Request, accessKeyID, secretAccessKey string, ignoredCanonicalizedHeaders map[string]bool) *http.Request {
+func SignV2(req *http.Request, accessKeyID, secretAccessKey string, ignoredCanonicalizedHeaders map[string]bool) *http.Request {
 	// Signature calculation is not needed for anonymous credentials.
 	if accessKeyID == "" || secretAccessKey == "" {
-		return &req
+		return req
 	}
 
 	// Prepare auth header.
@@ -153,10 +153,10 @@ func SignV2(req http.Request, accessKeyID, secretAccessKey string, ignoredCanoni
 	// Set Authorization header.
 	req.Header.Set("Authorization", authHeader)
 
-	return &req
+	return req
 }
 
-func calculateV2(req http.Request, access string, secret string, ignoredCanHeaders map[string]bool) string {
+func calculateV2(req *http.Request, access string, secret string, ignoredCanHeaders map[string]bool) string {
 	// Initial time.
 
 	// Add date if x-amz-date is not present.
@@ -174,13 +174,13 @@ func calculateV2(req http.Request, access string, secret string, ignoredCanHeade
 	encoder.Close()
 	return authHeader.String()
 }
-func sanitizeDates(req http.Request) http.Request {
+func sanitizeDates(req *http.Request) *http.Request {
 	req.Header.Del("Date")
 	return addAmazonDateHeader(req, time.Now())
 
 }
 
-func addAmazonDateHeader(req http.Request, time time.Time) http.Request {
+func addAmazonDateHeader(req *http.Request, time time.Time) *http.Request {
 	req.Header.Set("x-amz-date", time.Format(iso8601DateFormat))
 	return req
 }
@@ -193,7 +193,7 @@ func addAmazonDateHeader(req http.Request, time time.Time) http.Request {
 //	 Expires + "\n" +
 //	 CanonicalizedProtocolHeaders +
 //	 CanonicalizedResource;
-func preStringToSignV2(req http.Request, ignoredHeaders map[string]bool) string {
+func preStringToSignV2(req *http.Request, ignoredHeaders map[string]bool) string {
 	buf := new(bytes.Buffer)
 	// Write standard headers.
 	writePreSignV2Headers(buf, req)
@@ -205,7 +205,7 @@ func preStringToSignV2(req http.Request, ignoredHeaders map[string]bool) string 
 }
 
 // writePreSignV2Headers - write preSign v2 required headers.
-func writePreSignV2Headers(buf *bytes.Buffer, req http.Request) {
+func writePreSignV2Headers(buf *bytes.Buffer, req *http.Request) {
 	buf.WriteString(req.Method + "\n")
 	buf.WriteString(req.Header.Get("Content-Md5") + "\n")
 	buf.WriteString(req.Header.Get("Content-Type") + "\n")
@@ -220,7 +220,7 @@ func writePreSignV2Headers(buf *bytes.Buffer, req http.Request) {
 //	 Date + "\n" +
 //	 CanonicalizedProtocolHeaders +
 //	 CanonicalizedResource;
-func stringToSignV2(req http.Request, ignoredCanonicalizedHeaders map[string]bool) string {
+func stringToSignV2(req *http.Request, ignoredCanonicalizedHeaders map[string]bool) string {
 	buf := new(bytes.Buffer)
 	// Write standard headers.
 	writeSignV2Headers(buf, req)
@@ -232,7 +232,7 @@ func stringToSignV2(req http.Request, ignoredCanonicalizedHeaders map[string]boo
 }
 
 // writeSignV2Headers - write signV2 required headers.
-func writeSignV2Headers(buf *bytes.Buffer, req http.Request) {
+func writeSignV2Headers(buf *bytes.Buffer, req *http.Request) {
 	buf.WriteString(req.Method + "\n")
 	buf.WriteString(req.Header.Get("Content-Md5") + "\n")
 	buf.WriteString(req.Header.Get("Content-Type") + "\n")
@@ -240,7 +240,7 @@ func writeSignV2Headers(buf *bytes.Buffer, req http.Request) {
 }
 
 // writeCanonicalizedHeaders - write canonicalized headers.
-func writeCanonicalizedHeaders(buf *bytes.Buffer, req http.Request, ignoredHeaders map[string]bool) {
+func writeCanonicalizedHeaders(buf *bytes.Buffer, req *http.Request, ignoredHeaders map[string]bool) {
 	var protoHeaders []string
 	vals := make(map[string][]string)
 	for k, vv := range req.Header {
@@ -312,11 +312,11 @@ var resourceList = []string{
 // CanonicalizedResource = [ "/" + Bucket ] +
 // 	  <HTTP-Request-URI, from the protocol name up to the query string> +
 // 	  [ sub-resource, if present. For example "?acl", "?location", "?logging", or "?torrent"];
-func writeCanonicalizedResource(buf *bytes.Buffer, req http.Request) {
+func writeCanonicalizedResource(buf *bytes.Buffer, req *http.Request) {
 	// Save request URL.
 	requestURL := req.URL
 	// Get encoded URL path.
-	buf.WriteString(encodeURL2Path(&req))
+	buf.WriteString(encodeURL2Path(req))
 	if requestURL.RawQuery != "" {
 		var n int
 		vals, _ := url.ParseQuery(requestURL.RawQuery)
@@ -345,7 +345,7 @@ func writeCanonicalizedResource(buf *bytes.Buffer, req http.Request) {
 }
 
 // VerifyV2 verify if v2 signature is correct
-func VerifyV2(req http.Request, secretAccessKey string, ignoredCanonicalizedHeaders map[string]bool) (bool, error) {
+func VerifyV2(req *http.Request, secretAccessKey string, ignoredCanonicalizedHeaders map[string]bool) (bool, error) {
 	origAuthHeader, err := extractAuthorizationHeader(req.Header.Get("Authorization"))
 	if err != nil {
 		return false, fmt.Errorf("error while parsing authorization header")

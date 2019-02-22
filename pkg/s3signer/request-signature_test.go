@@ -29,42 +29,42 @@ func TestSignatureCalculation(t *testing.T) {
 	if err != nil {
 		t.Fatal("Error:", err)
 	}
-	req = SignV4(*req, "", "", "", "us-east-1", "s3")
+	req = SignV4(req, "", "", "", "us-east-1", "s3")
 	if req.Header.Get("Authorization") != "" {
 		t.Fatal("Error: anonymous credentials should not have Authorization header.")
 	}
 
-	req = PreSignV4(*req, "", "", "", "us-east-1", "s3", 0)
+	req = PreSignV4(req, "", "", "", "us-east-1", "s3", 0)
 	if strings.Contains(req.URL.RawQuery, "X-Amz-Signature") {
 		t.Fatal("Error: anonymous credentials should not have Signature query resource.")
 	}
 
-	req = SignV2(*req, "", "", make(map[string]bool))
+	req = SignV2(req, "", "", make(map[string]bool))
 	if req.Header.Get("Authorization") != "" {
 		t.Fatal("Error: anonymous credentials should not have Authorization header.")
 	}
 
-	req = PreSignV2(*req, "", "", 0, make(map[string]bool))
+	req = PreSignV2(req, "", "", 0, make(map[string]bool))
 	if strings.Contains(req.URL.RawQuery, "Signature") {
 		t.Fatal("Error: anonymous credentials should not have Signature query resource.")
 	}
 
-	req = SignV4(*req, "ACCESS-KEY", "SECRET-KEY", "", "us-east-1", "s3")
+	req = SignV4(req, "ACCESS-KEY", "SECRET-KEY", "", "us-east-1", "s3")
 	if req.Header.Get("Authorization") == "" {
 		t.Fatal("Error: normal credentials should have Authorization header.")
 	}
 
-	req = PreSignV4(*req, "ACCESS-KEY", "SECRET-KEY", "", "us-east-1", "s3", 0)
+	req = PreSignV4(req, "ACCESS-KEY", "SECRET-KEY", "", "us-east-1", "s3", 0)
 	if !strings.Contains(req.URL.RawQuery, "X-Amz-Signature") {
 		t.Fatal("Error: normal credentials should have Signature query resource.")
 	}
 
-	req = SignV2(*req, "ACCESS-KEY", "SECRET-KEY", make(map[string]bool))
+	req = SignV2(req, "ACCESS-KEY", "SECRET-KEY", make(map[string]bool))
 	if req.Header.Get("Authorization") == "" {
 		t.Fatal("Error: normal credentials should have Authorization header.")
 	}
 
-	req = PreSignV2(*req, "ACCESS-KEY", "SECRET-KEY", 0, make(map[string]bool))
+	req = PreSignV2(req, "ACCESS-KEY", "SECRET-KEY", 0, make(map[string]bool))
 	if !strings.Contains(req.URL.RawQuery, "Signature") {
 		t.Fatal("Error: normal credentials should not have Signature query resource.")
 	}
