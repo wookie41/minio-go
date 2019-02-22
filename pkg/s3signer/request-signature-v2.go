@@ -158,12 +158,9 @@ func SignV2(req http.Request, accessKeyID, secretAccessKey string, ignoredCanoni
 
 func calculateV2(req http.Request, access string, secret string, ignoredCanHeaders map[string]bool) string {
 	// Initial time.
-	d := time.Now().UTC()
 
 	// Add date if x-amz-date is not present.
-	if req.Header.Get("X-Amz-Date") == "" && req.Header.Get("Date") == "" {
-		req.Header.Set("Date", d.Format(http.TimeFormat))
-	}
+	req = addDateHeaderIfNeeded(req)
 
 	// Calculate HMAC for secretAccessKey.
 	stringToSign := stringToSignV2(req, ignoredCanHeaders)
@@ -176,6 +173,16 @@ func calculateV2(req http.Request, access string, secret string, ignoredCanHeade
 	encoder.Write(hm.Sum(nil))
 	encoder.Close()
 	return authHeader.String()
+}
+func addDateHeaderIfNeeded(req http.Request) http.Request {
+	return addDateHeaderWithTime(req, time.Now())
+}
+
+func addDateHeaderWithTime(req http.Request, time time.Time) http.Request {
+	if req.Header.Get("X-Amz-Date") == "" && req.Header.Get("Date") == "" {
+		req.Header.Set("Date", time.Format(http.TimeFormat))
+	}
+	return req
 }
 
 // From the Amazon docs:
