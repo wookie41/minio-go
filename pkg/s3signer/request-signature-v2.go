@@ -175,12 +175,12 @@ func calculateV2(req *http.Request, access string, secret string, ignoredCanHead
 	return authHeader.String()
 }
 func sanitizeDates(req *http.Request) *http.Request {
-	req.Header.Del("Date")
 	return addAmazonDateHeader(req, time.Now())
 
 }
 
 func addAmazonDateHeader(req *http.Request, time time.Time) *http.Request {
+	req.Header.Del("Date")
 	req.Header.Set("x-amz-date", time.Format(iso8601DateFormat))
 	return req
 }
