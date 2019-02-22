@@ -279,7 +279,7 @@ func SignV4(req http.Request, accessKeyID, secretAccessKey, sessionToken, locati
 	t := time.Now().UTC()
 
 	// Set x-amz-date.
-	req = addDateHeaderWithTime(req, t)
+	req = addAmazonDateHeader(req, t)
 
 	// Set session token if available.
 	if sessionToken != "" {

@@ -160,7 +160,7 @@ func calculateV2(req http.Request, access string, secret string, ignoredCanHeade
 	// Initial time.
 
 	// Add date if x-amz-date is not present.
-	req = addDateHeaderIfNeeded(req)
+	req = sanitizeDates(req)
 
 	// Calculate HMAC for secretAccessKey.
 	stringToSign := stringToSignV2(req, ignoredCanHeaders)
@@ -174,14 +174,14 @@ func calculateV2(req http.Request, access string, secret string, ignoredCanHeade
 	encoder.Close()
 	return authHeader.String()
 }
-func addDateHeaderIfNeeded(req http.Request) http.Request {
-	return addDateHeaderWithTime(req, time.Now())
+func sanitizeDates(req http.Request) http.Request {
+	req.Header.Del("Date")
+	return addAmazonDateHeader(req, time.Now())
+
 }
 
-func addDateHeaderWithTime(req http.Request, time time.Time) http.Request {
-	if req.Header.Get("X-Amz-Date") == "" && req.Header.Get("Date") == "" {
-		req.Header.Set("Date", time.Format(http.TimeFormat))
-	}
+func addAmazonDateHeader(req http.Request, time time.Time) http.Request {
+	req.Header.Set("x-amz-date", time.Format(iso8601DateFormat))
 	return req
 }
 
