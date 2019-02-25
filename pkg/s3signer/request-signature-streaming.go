@@ -44,10 +44,12 @@ const (
 // Request headers to be ignored while calculating seed signature for
 // a request.
 var ignoredStreamingHeaders = map[string]bool{
-	"Authorization": true,
-	"User-Agent":    true,
-	"Content-Type":  true,
+	"Authorization":   true,
+	"User-Agent":      true,
+	"Content-Type":    true,
 	"Content-Length":  true,
+	"Connection":      true,
+	"X-Forwarded-For": true,
 }
 
 // getSignedChunkLength - calculates the length of chunk metadata
@@ -145,7 +147,7 @@ type StreamingReader struct {
 	region          string
 	prevSignature   string
 	seedSignature   string
-	service 		string
+	service         string
 	contentLen      int64         // Content-Length from req header
 	baseReadCloser  io.ReadCloser // underlying io.Reader
 	bytesRead       int64         // bytes read from underlying io.Reader
@@ -216,7 +218,7 @@ region, service string, dataLen int64, reqTime time.Time) *http.Request {
 		secretAccessKey: secretAccessKey,
 		sessionToken:    sessionToken,
 		region:          region,
-		service: service,
+		service:         service,
 		reqTime:         reqTime,
 		chunkBuf:        make([]byte, payloadChunkSize),
 		contentLen:      dataLen,
