@@ -73,7 +73,7 @@ const (
 ///
 ///      Is skipped for obvious reasons
 ///
-var v4IgnoredHeaders = map[string]bool{
+var defaultV4IgnoredHeaders = map[string]bool{
 	"Authorization":  	true,
 	"Content-Type":   	true,
 	"Content-Length": 	true,
@@ -224,7 +224,7 @@ func PreSignV4(req *http.Request, accessKeyID, secretAccessKey, sessionToken, lo
 	credential := GetCredential(accessKeyID, location, service, t)
 
 	// Get all signed headers.
-	signedHeaders := getSignedHeaders(req, v4IgnoredHeaders)
+	signedHeaders := getSignedHeaders(req, defaultV4IgnoredHeaders)
 
 	// Set URL query.
 	query := req.URL.Query()
@@ -240,7 +240,7 @@ func PreSignV4(req *http.Request, accessKeyID, secretAccessKey, sessionToken, lo
 	req.URL.RawQuery = query.Encode()
 
 	// Get canonical request.
-	canonicalRequest := getCanonicalRequest(req, v4IgnoredHeaders)
+	canonicalRequest := getCanonicalRequest(req, defaultV4IgnoredHeaders)
 
 	// Get string to sign from canonical request.
 	stringToSign := getStringToSignV4(t, location, service, canonicalRequest)
@@ -270,6 +270,12 @@ func PostPresignSignatureV4(policyBase64 string, t time.Time, secretAccessKey, l
 // SignV4 sign the request before Do(), in accordance with
 // http://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-authenticating-requests.html.
 func SignV4(req *http.Request, accessKeyID, secretAccessKey, sessionToken, location, service string) *http.Request {
+	return SignV4WithIgnoredHeaders(req, accessKeyID, secretAccessKey, sessionToken, location, service, defaultV4IgnoredHeaders)
+}
+
+// SignV4WithIgnoredHeaders sign the request before Do(), in accordance with
+// http://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-authenticating-requests.html.
+func SignV4WithIgnoredHeaders(req *http.Request, accessKeyID, secretAccessKey, sessionToken, location, service string, ignoredHeaders map[string]bool) *http.Request {
 	// Signature calculation is not needed for anonymous credentials.
 	if accessKeyID == "" || secretAccessKey == "" {
 		return req
@@ -287,7 +293,7 @@ func SignV4(req *http.Request, accessKeyID, secretAccessKey, sessionToken, locat
 	}
 
 	// Get canonical request.
-	canonicalRequest := getCanonicalRequest(req, v4IgnoredHeaders)
+	canonicalRequest := getCanonicalRequest(req, ignoredHeaders)
 
 	// Get string to sign from canonical request.
 	stringToSign := getStringToSignV4(t, location, service, canonicalRequest)
@@ -299,7 +305,7 @@ func SignV4(req *http.Request, accessKeyID, secretAccessKey, sessionToken, locat
 	credential := GetCredential(accessKeyID, location, service, t)
 
 	// Get all signed headers.
-	signedHeaders := getSignedHeaders(req, v4IgnoredHeaders)
+	signedHeaders := getSignedHeaders(req, ignoredHeaders)
 
 	// Calculate signature.
 	signature := getSignature(signingKey, stringToSign)

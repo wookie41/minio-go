@@ -28,7 +28,7 @@ func TestRequestHost(t *testing.T) {
 	req, _ := buildRequest("dynamodb", "us-east-1", "{}")
 	req.URL.RawQuery = "Foo=z&Foo=o&Foo=m&Foo=a"
 	req.Host = "myhost"
-	canonicalHeaders := getCanonicalHeaders(req, v4IgnoredHeaders)
+	canonicalHeaders := getCanonicalHeaders(req, defaultV4IgnoredHeaders)
 
 	if !strings.Contains(canonicalHeaders, "host:"+req.Host) {
 		t.Errorf("canonical host header invalid")
