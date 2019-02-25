@@ -147,6 +147,7 @@ func SignV2(req *http.Request, accessKeyID, secretAccessKey string, ignoredCanon
 		return req
 	}
 
+	req = sanitizeDates(req)
 	// Prepare auth header.
 	authHeader := calculateV2(req, accessKeyID, secretAccessKey, ignoredCanonicalizedHeaders)
 
@@ -157,11 +158,6 @@ func SignV2(req *http.Request, accessKeyID, secretAccessKey string, ignoredCanon
 }
 
 func calculateV2(req *http.Request, access string, secret string, ignoredCanHeaders map[string]bool) string {
-	// Initial time.
-
-	// Add date if x-amz-date is not present.
-	req = sanitizeDates(req)
-
 	// Calculate HMAC for secretAccessKey.
 	stringToSign := stringToSignV2(req, ignoredCanHeaders)
 	hm := hmac.New(sha1.New, []byte(secret))
