@@ -176,8 +176,8 @@ func sanitizeDates(req *http.Request) *http.Request {
 }
 
 func addAmazonDateHeader(req *http.Request, time time.Time) *http.Request {
-	req.Header.Del("Date")
-	req.Header.Set("x-amz-date", time.Format(iso8601DateFormat))
+	req.Header.Set("Date", time.UTC().Format(http.TimeFormat))
+	req.Header.Set("x-amz-date", time.UTC().Format(iso8601DateFormat))
 	return req
 }
 
