@@ -147,7 +147,7 @@ func SignV2(req *http.Request, accessKeyID, secretAccessKey string, ignoredCanon
 		return req
 	}
 
-	req = sanitizeDates(req)
+	req = sanitizeV2DateHeader(req, time.Now())
 	// Prepare auth header.
 	authHeader := calculateV2(req, accessKeyID, secretAccessKey, ignoredCanonicalizedHeaders)
 
@@ -170,14 +170,10 @@ func calculateV2(req *http.Request, access string, secret string, ignoredCanHead
 	encoder.Close()
 	return authHeader.String()
 }
-func sanitizeDates(req *http.Request) *http.Request {
-	return addAmazonDateHeader(req, time.Now())
 
-}
-
-func addAmazonDateHeader(req *http.Request, time time.Time) *http.Request {
-	req.Header.Set("Date", time.UTC().Format(http.TimeFormat))
-	req.Header.Set("x-amz-date", time.UTC().Format(iso8601DateFormat))
+func sanitizeV2DateHeader(req *http.Request, t time.Time) *http.Request {
+	req.Header.Set("Date", t.UTC().Format(http.TimeFormat))
+	req.Header.Del("x-amz-date")
 	return req
 }
 

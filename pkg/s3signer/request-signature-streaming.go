@@ -44,12 +44,10 @@ const (
 // Request headers to be ignored while calculating seed signature for
 // a request.
 var ignoredStreamingHeaders = map[string]bool{
-	"Authorization":   true,
-	"User-Agent":      true,
-	"Content-Type":    true,
-	"Content-Length":  true,
-	"Connection":      true,
-	"X-Forwarded-For": true,
+	"Authorization":  	true,
+	"Content-Type":   	true,
+	"Content-Length": 	true,
+	"User-Agent":     	true,
 }
 
 // getSignedChunkLength - calculates the length of chunk metadata
@@ -125,9 +123,9 @@ previousSignature, secretAccessKey string) string {
 }
 
 // getSeedSignature - returns the seed signature for a given request.
-func (s *StreamingReader) setSeedSignature(req *http.Request) {
+func (s *StreamingReader) setSeedSignature(req *http.Request, ignoredHeaders map[string]bool) {
 	// Get canonical request
-	canonicalRequest := getCanonicalRequest(req, ignoredStreamingHeaders)
+	canonicalRequest := getCanonicalRequest(req, ignoredHeaders)
 
 	// Get string to sign from canonical request.
 	stringToSign := getStringToSignV4(s.reqTime, s.region, s.service, canonicalRequest)
@@ -147,7 +145,7 @@ type StreamingReader struct {
 	region          string
 	prevSignature   string
 	seedSignature   string
-	service         string
+	service 		string
 	contentLen      int64         // Content-Length from req header
 	baseReadCloser  io.ReadCloser // underlying io.Reader
 	bytesRead       int64         // bytes read from underlying io.Reader
@@ -187,11 +185,11 @@ func (s *StreamingReader) signChunk(chunkLen int) {
 
 // setStreamingAuthHeader - builds and sets authorization header value
 // for streaming signature.
-func (s *StreamingReader) setStreamingAuthHeader(req *http.Request) {
+func (s *StreamingReader) setStreamingAuthHeader(req *http.Request, ignoredHeaders map[string]bool) {
 	credential := GetCredential(s.accessKeyID, s.region, s.service, s.reqTime)
 	authParts := []string{
 		signV4Algorithm + " Credential=" + credential,
-		"SignedHeaders=" + getSignedHeaders(req, ignoredStreamingHeaders),
+		"SignedHeaders=" + getSignedHeaders(req, ignoredHeaders),
 		"Signature=" + s.seedSignature,
 	}
 
@@ -202,8 +200,8 @@ func (s *StreamingReader) setStreamingAuthHeader(req *http.Request) {
 
 // StreamingSignV4 - provides chunked upload signatureV4 support by
 // implementing io.Reader.
-func StreamingSignV4(req *http.Request, accessKeyID, secretAccessKey, sessionToken,
-region, service string, dataLen int64, reqTime time.Time) *http.Request {
+func StreamingSignV4WithIgnoredHeaders(req *http.Request, accessKeyID, secretAccessKey, sessionToken,
+region, service string, dataLen int64, reqTime time.Time, ignoredHeaders map[string]bool) *http.Request {
 
 	// Set headers needed for streaming signature.
 	prepareStreamingRequest(req, sessionToken, dataLen, reqTime)
@@ -218,7 +216,7 @@ region, service string, dataLen int64, reqTime time.Time) *http.Request {
 		secretAccessKey: secretAccessKey,
 		sessionToken:    sessionToken,
 		region:          region,
-		service:         service,
+		service: service,
 		reqTime:         reqTime,
 		chunkBuf:        make([]byte, payloadChunkSize),
 		contentLen:      dataLen,
@@ -230,10 +228,10 @@ region, service string, dataLen int64, reqTime time.Time) *http.Request {
 	// Add the request headers required for chunk upload signing.
 
 	// Compute the seed signature.
-	stReader.setSeedSignature(req)
+	stReader.setSeedSignature(req, ignoredHeaders)
 
 	// Set the authorization header with the seed signature.
-	stReader.setStreamingAuthHeader(req)
+	stReader.setStreamingAuthHeader(req, ignoredHeaders)
 
 	// Set seed signature as prevSignature for subsequent
 	// streaming signing process.
@@ -241,6 +239,13 @@ region, service string, dataLen int64, reqTime time.Time) *http.Request {
 	req.Body = stReader
 
 	return req
+}
+
+func StreamingSignV4(req *http.Request, accessKeyID, secretAccessKey, sessionToken,
+region, service string, dataLen int64, reqTime time.Time) *http.Request {
+	return StreamingSignV4WithIgnoredHeaders(
+		req, accessKeyID, secretAccessKey, sessionToken,
+		region, service, dataLen, reqTime, ignoredStreamingHeaders)
 }
 
 // Read - this method performs chunk upload signature providing a
