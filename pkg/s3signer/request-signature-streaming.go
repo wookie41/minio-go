@@ -44,14 +44,13 @@ const (
 // Request headers to be ignored while calculating seed signature for
 // a request.
 var ignoredStreamingHeaders = map[string]bool{
-	"Authorization":  	true,
-	"Content-Type":   	true,
-	"Content-Length": 	true,
-	"User-Agent":     	true,
+	"Authorization": true,
+	"Content-Type":  true,
+	"User-Agent":    true,
 }
 
-// getSignedChunkLength - calculates the length of chunk metadata
-func getSignedChunkLength(chunkDataSize int64) int64 {
+// GetSignedChunkLength - calculates the length of chunk metadata
+func GetSignedChunkLength(chunkDataSize int64) int64 {
 	return int64(len(fmt.Sprintf("%x", chunkDataSize))) +
 		chunkSigConstLen +
 		signatureStrLen +
@@ -69,11 +68,11 @@ func getStreamLength(dataLen, chunkSize int64) int64 {
 	chunksCount := int64(dataLen / chunkSize)
 	remainingBytes := int64(dataLen % chunkSize)
 	streamLen := int64(0)
-	streamLen += chunksCount * getSignedChunkLength(chunkSize)
+	streamLen += chunksCount * GetSignedChunkLength(chunkSize)
 	if remainingBytes > 0 {
-		streamLen += getSignedChunkLength(remainingBytes)
+		streamLen += GetSignedChunkLength(remainingBytes)
 	}
-	streamLen += getSignedChunkLength(0)
+	streamLen += GetSignedChunkLength(0)
 	return streamLen
 }
 
@@ -115,7 +114,7 @@ func buildChunkHeader(chunkLen int64, signature string) []byte {
 
 // buildChunkSignature - returns chunk signature for a given chunk and previous signature.
 func buildChunkSignature(chunkData []byte, reqTime time.Time, region, service,
-previousSignature, secretAccessKey string) string {
+	previousSignature, secretAccessKey string) string {
 
 	chunkStringToSign := buildChunkStringToSign(reqTime, region, service, previousSignature, chunkData)
 	signingKey := getSigningKey(secretAccessKey, region, service, reqTime)
@@ -145,7 +144,7 @@ type StreamingReader struct {
 	region          string
 	prevSignature   string
 	seedSignature   string
-	service 		string
+	service         string
 	contentLen      int64         // Content-Length from req header
 	baseReadCloser  io.ReadCloser // underlying io.Reader
 	bytesRead       int64         // bytes read from underlying io.Reader
@@ -201,7 +200,7 @@ func (s *StreamingReader) setStreamingAuthHeader(req *http.Request, ignoredHeade
 // StreamingSignV4 - provides chunked upload signatureV4 support by
 // implementing io.Reader.
 func StreamingSignV4WithIgnoredHeaders(req *http.Request, accessKeyID, secretAccessKey, sessionToken,
-region, service string, dataLen int64, reqTime time.Time, ignoredHeaders map[string]bool) *http.Request {
+	region, service string, dataLen int64, reqTime time.Time, ignoredHeaders map[string]bool) *http.Request {
 
 	// Set headers needed for streaming signature.
 	prepareStreamingRequest(req, sessionToken, dataLen, reqTime)
@@ -216,7 +215,7 @@ region, service string, dataLen int64, reqTime time.Time, ignoredHeaders map[str
 		secretAccessKey: secretAccessKey,
 		sessionToken:    sessionToken,
 		region:          region,
-		service: service,
+		service:         service,
 		reqTime:         reqTime,
 		chunkBuf:        make([]byte, payloadChunkSize),
 		contentLen:      dataLen,
@@ -242,7 +241,7 @@ region, service string, dataLen int64, reqTime time.Time, ignoredHeaders map[str
 }
 
 func StreamingSignV4(req *http.Request, accessKeyID, secretAccessKey, sessionToken,
-region, service string, dataLen int64, reqTime time.Time) *http.Request {
+	region, service string, dataLen int64, reqTime time.Time) *http.Request {
 	return StreamingSignV4WithIgnoredHeaders(
 		req, accessKeyID, secretAccessKey, sessionToken,
 		region, service, dataLen, reqTime, ignoredStreamingHeaders)
