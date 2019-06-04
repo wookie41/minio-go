@@ -349,7 +349,7 @@ func (s *StreamingReader) Read(buf []byte) (int, error) {
 	return s.buf.Read(buf)
 }
 
-func extractNextChunkLength(buffer io.Reader) (uint16, int, error) {
+func extractNextChunkLength(buffer io.Reader) (int, int, error) {
 	currentCharacter := make([]byte, 1)
 	var chunkSizeInHex strings.Builder
 
@@ -369,7 +369,7 @@ func extractNextChunkLength(buffer io.Reader) (uint16, int, error) {
 
 	inHex := strings.TrimSpace(chunkSizeInHex.String())
 	size, _ := strconv.ParseUint(inHex, 16, 64)
-	return uint16(size), chunkSizeInHex.Len(), nil
+	return int(size), chunkSizeInHex.Len(), nil
 }
 
 // Close - this method makes underlying io.ReadCloser's Close method available.

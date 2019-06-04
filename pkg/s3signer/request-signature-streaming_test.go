@@ -19,7 +19,6 @@ package s3signer
 
 import (
 	"bytes"
-	"fmt"
 	"io/ioutil"
 	"testing"
 	"time"
