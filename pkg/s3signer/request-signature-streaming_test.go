@@ -19,6 +19,7 @@ package s3signer
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"testing"
 	"time"
@@ -40,7 +41,7 @@ func TestGetSeedSignature(t *testing.T) {
 		t.Fatalf("Failed to parse time - %v", err)
 	}
 
-	req = StreamingSignV4(req, accessKeyID, secretAccessKeyID, "", "us-east-1", "s3", int64(dataLen), reqTime)
+	req = StreamingSignV4(req, accessKeyID, secretAccessKeyID, "", "us-east-1", "s3", int64(dataLen), reqTime, false)
 	actualSeedSignature := req.Body.(*StreamingReader).seedSignature
 
 	expectedSeedSignature := "38cab3af09aa15ddf29e26e36236f60fb6bfb6243a20797ae9a8183674526079"
@@ -76,7 +77,7 @@ func TestSetStreamingAuthorization(t *testing.T) {
 
 	dataLen := int64(65 * 1024)
 	reqTime, _ := time.Parse(iso8601DateFormat, "20130524T000000Z")
-	req = StreamingSignV4(req, accessKeyID, secretAccessKeyID, "", location, service, dataLen, reqTime)
+	req = StreamingSignV4(req, accessKeyID, secretAccessKeyID, "", location, service, dataLen, reqTime, false)
 
 	expectedAuthorization := "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20130524/us-east-1/s3/aws4_request,SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-decoded-content-length;x-amz-storage-class,Signature=38cab3af09aa15ddf29e26e36236f60fb6bfb6243a20797ae9a8183674526079"
 
@@ -102,7 +103,7 @@ func TestStreamingReader(t *testing.T) {
 
 	baseReader := ioutil.NopCloser(bytes.NewReader(bytes.Repeat([]byte("a"), 65*1024)))
 	req.Body = baseReader
-	req = StreamingSignV4(req, accessKeyID, secretAccessKeyID, "", location, service, dataLen, reqTime)
+	req = StreamingSignV4(req, accessKeyID, secretAccessKeyID, "", location, service, dataLen, reqTime, false)
 
 	b, err := ioutil.ReadAll(req.Body)
 	if err != nil {
@@ -110,3 +111,30 @@ func TestStreamingReader(t *testing.T) {
 	}
 	req.Body.Close()
 }
+
+func TestStreamingRequestProxing(t *testing.T) {
+	reqTime, _ := time.Parse("20060102T150405Z", "20130524T000000Z")
+	location := "us-east-1"
+	service := "s3"
+	secretAccessKeyID := "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+	accessKeyID := "AKIAIOSFODNN7EXAMPLE"
+	dataLen := int64(16)
+
+	body := ioutil.NopCloser(bytes.NewBuffer(signedChunkedPayload))
+	req := NewRequest("PUT", "/examplebucket/chunkObject.txt", body)
+	req.Header.Set("x-amz-storage-class", "REDUCED_REDUNDANCY")
+	req.ContentLength = int64(len(signedChunkedPayload))
+	req.Host = ""
+	req.URL.Host = "s3.amazonaws.com"
+
+	req = StreamingSignV4(req, accessKeyID, secretAccessKeyID, "", location, service, dataLen, reqTime, true)
+
+	b, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		t.Errorf("Expected no error but received %v  %d", err, len(b))
+	}
+
+	req.Body.Close()
+}
+
+var signedChunkedPayload = []byte("c;chunk-signature=08f6608fdf69bd6ed7c3c6198b78c799e1f88638dd785c4bb4ae1c536115e79e\r\n1tetest1234\n\r\n4;chunk-signature=08f6608fdf69bd6ed7c3c6198b78c799e1f88638dd785c4bb4ae1c536115e79e\r\n123\n\r\n0;")
