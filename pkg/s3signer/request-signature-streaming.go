@@ -122,7 +122,7 @@ func buildChunkHeader(chunkLen int64, signature string) []byte {
 
 // buildChunkSignature - returns chunk signature for a given chunk and previous signature.
 func buildChunkSignature(chunkData []byte, reqTime time.Time, region, service,
-	previousSignature, secretAccessKey string) string {
+previousSignature, secretAccessKey string) string {
 
 	chunkStringToSign := buildChunkStringToSign(reqTime, region, service, previousSignature, chunkData)
 	signingKey := getSigningKey(secretAccessKey, region, service, reqTime)
@@ -209,7 +209,7 @@ func (s *StreamingReader) setStreamingAuthHeader(req *http.Request, ignoredHeade
 // StreamingSignV4 - provides chunked upload signatureV4 support by
 // implementing io.Reader.
 func StreamingSignV4WithIgnoredHeaders(req *http.Request, accessKeyID, secretAccessKey, sessionToken,
-	region, service string, dataLen int64, reqTime time.Time, ignoredHeaders map[string]bool, isProxying bool) *http.Request {
+region, service string, dataLen int64, reqTime time.Time, ignoredHeaders map[string]bool, isProxying bool) *http.Request {
 
 	// Set headers needed for streaming signature.
 	prepareStreamingRequest(req, sessionToken, dataLen, reqTime)
@@ -251,7 +251,7 @@ func StreamingSignV4WithIgnoredHeaders(req *http.Request, accessKeyID, secretAcc
 }
 
 func StreamingSignV4(req *http.Request, accessKeyID, secretAccessKey, sessionToken,
-	region, service string, dataLen int64, reqTime time.Time, isProxying bool) *http.Request {
+region, service string, dataLen int64, reqTime time.Time, isProxying bool) *http.Request {
 	return StreamingSignV4WithIgnoredHeaders(
 		req, accessKeyID, secretAccessKey, sessionToken,
 		region, service, dataLen, reqTime, ignoredStreamingHeaders, isProxying)
@@ -269,6 +269,7 @@ func (s *StreamingReader) Read(buf []byte) (int, error) {
 		// bytes than asked for.
 	case s.buf.Len() < len(buf):
 		s.chunkBufLen = 0
+		bytesLeft := 0
 		for {
 
 			chunkSize := payloadChunkSize
@@ -276,10 +277,23 @@ func (s *StreamingReader) Read(buf []byte) (int, error) {
 			var err error
 
 			if s.isProxying {
-				chunkLength, err := s.discardNextSignature()
-				if err != nil {
-					return 0, err
+
+				var chunkLength int
+				if bytesLeft > 0 {
+					chunkLength = bytesLeft
+					bytesLeft = 0
+				} else {
+					chunkLength, err = s.discardNextSignature()
+					if err != nil {
+						return 0, err
+					}
 				}
+
+				if chunkLength > payloadChunkSize {
+					bytesLeft = chunkLength - payloadChunkSize
+					chunkLength = payloadChunkSize
+				}
+
 				chunkSize = int(chunkLength)
 				n1, err = s.baseReadCloser.Read(s.chunkBuf[:chunkSize])
 			} else {
