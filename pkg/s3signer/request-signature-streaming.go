@@ -247,6 +247,9 @@ region, service string, dataLen int64, reqTime time.Time, ignoredHeaders map[str
 	stReader.prevSignature = stReader.seedSignature
 	req.Body = stReader
 
+	//this is very akubra specific, as in akubra we know that the body is already in memory
+	//and GetBody simply returns a thin reader that reads the underlying buffer, so it's more
+	//efficient to calculate the md5 by simply reading the buffer and discarding the signatures
 	return req
 }
 
@@ -279,11 +282,13 @@ func (s *StreamingReader) Read(buf []byte) (int, error) {
 			if s.isProxying {
 
 				var chunkLength int
+
 				if bytesLeft > 0 {
 					chunkLength = bytesLeft
 					bytesLeft = 0
 				} else {
-					chunkLength, err = s.discardNextSignature()
+					bytesLeft = 0
+					chunkLength, err =  discardNextSignature(s.baseReadCloser)
 					if err != nil {
 						return 0, err
 					}
@@ -311,6 +316,26 @@ func (s *StreamingReader) Read(buf []byte) (int, error) {
 			//
 			// Callers should always process the n > 0 bytes returned
 			// before considering the error err.
+			if s.isProxying {
+
+				if bytesLeft == 0 {
+					//discarding the CLRF that is appended to each chunk's body
+					_, err = io.CopyN(ioutil.Discard, s.baseReadCloser, crlfLen)
+					if err != nil {
+						return -1, err
+					}
+				}
+
+				s.signChunk(chunkSize)
+				if chunkSize == 0 {
+					s.done = true
+					break
+				}
+				if err != nil {
+					return -1, err
+				}
+				continue
+			}
 			if n1 > 0 {
 				s.chunkBufLen += n1
 				s.bytesRead += int64(n1)
@@ -341,21 +366,10 @@ func (s *StreamingReader) Read(buf []byte) (int, error) {
 				}
 				return 0, err
 			}
-			if s.isProxying {
-				s.signChunk(chunkSize)
-				if chunkSize == 0 {
-					s.done = true
-					break
-				}
-				_, err = io.CopyN(ioutil.Discard, s.baseReadCloser, crlfLen)
-				if err != nil {
-					return -1, err
-				}
-			}
 		}
 	}
 	if s.isProxying {
-		_, err := s.discardNextSignature()
+		_, err := discardNextSignature(s.baseReadCloser)
 		if err != nil {
 			return 0, err
 		}
@@ -391,15 +405,15 @@ func (s *StreamingReader) Close() error {
 	return s.baseReadCloser.Close()
 }
 
-func (s *StreamingReader) discardNextSignature() (int, error) {
-	nextChunkLength, numOfCharsRead, err := extractNextChunkLength(s.baseReadCloser)
+func discardNextSignature(reader io.ReadCloser) (int, error) {
+	nextChunkLength, numOfCharsRead, err := extractNextChunkLength(reader)
 	if nextChunkLength == 0 {
 		return 0, nil
 	}
 	if err != nil {
 		return -1, err
 	}
-	_, err = io.CopyN(ioutil.Discard, s.baseReadCloser, GetChunkSignatureLength(int64(nextChunkLength))-int64(1)-int64(numOfCharsRead))
+	_, err = io.CopyN(ioutil.Discard, reader, GetChunkSignatureLength(int64(nextChunkLength)) - int64(1) - int64(numOfCharsRead))
 	if err != nil {
 		return -1, err
 	}
